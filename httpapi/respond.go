@@ -60,7 +60,7 @@ func Fail(w http.ResponseWriter, r *http.Request, err error) {
 		message = de.Message
 		switch de.Code {
 		case domain.CodeNotFound:
-			status = http.StatusInternalServerError
+			status = http.StatusNotFound
 		case domain.CodeInvalidInput:
 			status = http.StatusBadRequest
 		case domain.CodeConflict:

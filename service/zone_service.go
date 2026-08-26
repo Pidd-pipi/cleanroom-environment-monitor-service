@@ -37,7 +37,7 @@ func (s *ZoneService) CreateMonitorZone(m domain.MonitorZone, operator, requestI
 	m.Touch()
 	created, err := s.store.MonitorZones().Create(m)
 	if err != nil {
-		return domain.MonitorZone{}, fmt.Errorf("zone service create monitor: %v", err)
+		return domain.MonitorZone{}, fmt.Errorf("zone service create monitor: %w", err)
 	}
 	_ = s.audit.Log(domain.AuditMonitorCreate, operator, "monitor_zone", m.ID,
 		"monitor zone created: "+m.Name, requestID)
@@ -53,7 +53,7 @@ func (s *ZoneService) GetCleanZone(id string) (domain.CleanZone, error) {
 func (s *ZoneService) GetMonitorZone(id string) (domain.MonitorZone, error) {
 	m, err := s.store.MonitorZones().Get(id)
 	if err != nil {
-		return domain.MonitorZone{}, fmt.Errorf("zone service get monitor: %v", err)
+		return domain.MonitorZone{}, fmt.Errorf("zone service get monitor: %w", err)
 	}
 	return m, nil
 }

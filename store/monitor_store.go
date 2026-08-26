@@ -67,7 +67,7 @@ func (r *MonitorZoneStore) Get(id string) (domain.MonitorZone, error) {
 			return m, nil
 		}
 	}
-	return domain.MonitorZone{}, fmt.Errorf("monitor store: %v", domain.NotFound("monitor zone", id))
+	return domain.MonitorZone{}, domain.NotFound("monitor zone", id)
 }
 
 // GetOrErr is an alias used by services for readability.
