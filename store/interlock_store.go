@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"sort"
 
 	"example.com/cleanroom-environment-monitor-service/domain"
@@ -31,7 +30,7 @@ func (r *InterlockStore) Update(log domain.InterlockLog) (domain.InterlockLog, e
 			return log, r.s.flushLocked()
 		}
 	}
-	return domain.InterlockLog{}, fmt.Errorf("interlock store: %v", domain.NotFound("interlock log", log.ID))
+	return domain.InterlockLog{}, domain.NotFound("interlock log", log.ID)
 }
 
 // Get returns an interlock log by id.
@@ -43,7 +42,7 @@ func (r *InterlockStore) Get(id string) (domain.InterlockLog, error) {
 			return l, nil
 		}
 	}
-	return domain.InterlockLog{}, fmt.Errorf("interlock store: %v", domain.NotFound("interlock log", id))
+	return domain.InterlockLog{}, domain.NotFound("interlock log", id)
 }
 
 // List returns all interlock logs newest first.

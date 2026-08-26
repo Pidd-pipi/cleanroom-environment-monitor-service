@@ -32,7 +32,7 @@ func (s *InterlockService) IssueForArea(cleanZoneID, triggerMonitorZoneID, reaso
 	}
 	areaZones, err := s.store.CleanZones().ListByPhysicalArea(zone.PhysicalArea)
 	if err != nil {
-		return domain.InterlockLog{}, nil, err
+		return domain.InterlockLog{}, nil, wrapInfra("list clean zones for interlock", err)
 	}
 	if len(areaZones) == 0 {
 		return domain.InterlockLog{}, nil, domain.NotFound("clean zone", cleanZoneID)
@@ -56,7 +56,7 @@ func (s *InterlockService) IssueForArea(cleanZoneID, triggerMonitorZoneID, reaso
 		z.SetStatus(domain.ZoneStatusInterlocked)
 		affected = append(affected, z.ID)
 		if _, err := s.store.CleanZones().Update(*z); err != nil {
-			return domain.InterlockLog{}, nil, err
+			return domain.InterlockLog{}, nil, wrapInfra("update clean zone during interlock", err)
 		}
 	}
 
@@ -80,7 +80,7 @@ func (s *InterlockService) IssueForArea(cleanZoneID, triggerMonitorZoneID, reaso
 	logEntry.IssuedAt = now
 	created, err := s.store.Interlocks().Create(logEntry)
 	if err != nil {
-		return domain.InterlockLog{}, nil, err
+		return domain.InterlockLog{}, nil, wrapInfra("create interlock log", err)
 	}
 
 	detail := fmt.Sprintf("interlock level=%d actions=%v peak_ratio=%.3f affected=%v",
@@ -94,7 +94,7 @@ func (s *InterlockService) IssueForArea(cleanZoneID, triggerMonitorZoneID, reaso
 func (s *InterlockService) applyInterlockCommands(physicalArea string, actions []domain.InterlockAction, level int) error {
 	zones, err := s.store.CleanZones().ListByPhysicalArea(physicalArea)
 	if err != nil {
-		return err
+		return wrapInfra("list clean zones for interlock commands", err)
 	}
 	zoneIDs := map[string]bool{}
 	for _, z := range zones {
@@ -102,7 +102,7 @@ func (s *InterlockService) applyInterlockCommands(physicalArea string, actions [
 	}
 	monitors, err := s.store.MonitorZones().List()
 	if err != nil {
-		return err
+		return wrapInfra("list monitor zones for interlock commands", err)
 	}
 	for _, m := range monitors {
 		if !zoneIDs[m.CleanZoneID] {
@@ -118,7 +118,7 @@ func (s *InterlockService) applyInterlockCommands(physicalArea string, actions [
 		}
 		m.Touch()
 		if _, err := s.store.MonitorZones().Update(m); err != nil {
-			return err
+			return wrapInfra("update monitor zone during interlock", err)
 		}
 	}
 	return nil
@@ -138,7 +138,7 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 	}
 	areaZones, err := s.store.CleanZones().ListByPhysicalArea(zone.PhysicalArea)
 	if err != nil {
-		return nil, err
+		return nil, wrapInfra("list clean zones for restore", err)
 	}
 	now := time.Now().UTC()
 	restored := make([]domain.CleanZone, 0, len(areaZones))
@@ -153,7 +153,7 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 		}
 		z.SetStatus(domain.RestoreStatus)
 		if _, err := s.store.CleanZones().Update(*z); err != nil {
-			return nil, err
+			return nil, wrapInfra("update clean zone during restore", err)
 		}
 		restored = append(restored, *z)
 	}
@@ -161,7 +161,7 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 	// Close every open interlock log of the physical area.
 	logs, err := s.store.Interlocks().List()
 	if err != nil {
-		return nil, err
+		return nil, wrapInfra("list interlock logs for restore", err)
 	}
 	for _, l := range logs {
 		if !l.IsOpen() || l.PhysicalArea != zone.PhysicalArea {
@@ -169,7 +169,7 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 		}
 		l.Close(operator, note, now)
 		if _, err := s.store.Interlocks().Update(l); err != nil {
-			return nil, err
+			return nil, wrapInfra("close interlock log during restore", err)
 		}
 	}
 

@@ -22,7 +22,11 @@ func NewAlertHandler(svc *service.Services) *AlertHandler {
 func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := store.AlertFilter{}
 	if s := r.URL.Query().Get("status"); s != "" {
-		status, _ := domain.ParseAlertStatus(s)
+		status, err := domain.ParseAlertStatus(s)
+		if err != nil {
+			Fail(w, r, err)
+			return
+		}
 		filter.Status = status
 	}
 	if t := r.URL.Query().Get("type"); t != "" {

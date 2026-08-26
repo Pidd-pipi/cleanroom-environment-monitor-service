@@ -33,8 +33,9 @@ func AllZoneStatuses() []ZoneStatus {
 	}
 }
 
-// ParseZoneStatus converts a string into a ZoneStatus, returning an error
-// for unknown values.
+// ParseZoneStatus converts a string into a ZoneStatus, returning an
+// invalid-input domain error for unknown values so callers (and the HTTP
+// error mapper) classify it as a 400 bad request.
 func ParseZoneStatus(s string) (ZoneStatus, error) {
 	zs := ZoneStatus(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllZoneStatuses() {
@@ -42,7 +43,7 @@ func ParseZoneStatus(s string) (ZoneStatus, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown zone status %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown zone status %q", s))
 }
 
 // IsoClass is the ISO 14644-1 cleanroom class of a clean zone.
@@ -61,7 +62,8 @@ func AllIsoClasses() []IsoClass {
 	return []IsoClass{Iso5, Iso6, Iso7, Iso8}
 }
 
-// ParseIsoClass converts a string into an IsoClass.
+// ParseIsoClass converts a string into an IsoClass, returning an
+// invalid-input domain error for unknown values.
 func ParseIsoClass(s string) (IsoClass, error) {
 	ic := IsoClass(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllIsoClasses() {
@@ -69,7 +71,7 @@ func ParseIsoClass(s string) (IsoClass, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown iso class %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown iso class %q", s))
 }
 
 // ProcessType is the semiconductor process area of a clean zone.
@@ -86,7 +88,8 @@ func AllProcessTypes() []ProcessType {
 	return []ProcessType{ProcessLithography, ProcessEtching, ProcessDiffusion}
 }
 
-// ParseProcessType converts a string into a ProcessType.
+// ParseProcessType converts a string into a ProcessType, returning an
+// invalid-input domain error for unknown values.
 func ParseProcessType(s string) (ProcessType, error) {
 	pt := ProcessType(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllProcessTypes() {
@@ -94,7 +97,7 @@ func ParseProcessType(s string) (ProcessType, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown process type %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown process type %q", s))
 }
 
 // AlertType classifies cleanroom alerts.
@@ -112,7 +115,8 @@ func AllAlertTypes() []AlertType {
 	return []AlertType{AlertParticle, AlertTempHumidity, AlertPressure, AlertDataQuality}
 }
 
-// ParseAlertType converts a string into an AlertType.
+// ParseAlertType converts a string into an AlertType, returning an
+// invalid-input domain error for unknown values.
 func ParseAlertType(s string) (AlertType, error) {
 	at := AlertType(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllAlertTypes() {
@@ -120,7 +124,7 @@ func ParseAlertType(s string) (AlertType, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown alert type %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown alert type %q", s))
 }
 
 // AlertLevel is the severity of an alert.
@@ -137,7 +141,8 @@ func AllAlertLevels() []AlertLevel {
 	return []AlertLevel{AlertLevelInfo, AlertLevelWarning, AlertLevelCritical}
 }
 
-// ParseAlertLevel converts a string into an AlertLevel.
+// ParseAlertLevel converts a string into an AlertLevel, returning an
+// invalid-input domain error for unknown values.
 func ParseAlertLevel(s string) (AlertLevel, error) {
 	al := AlertLevel(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllAlertLevels() {
@@ -145,7 +150,7 @@ func ParseAlertLevel(s string) (AlertLevel, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown alert level %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown alert level %q", s))
 }
 
 // AlertStatus is the lifecycle status of an alert: open -> acknowledged
@@ -167,7 +172,8 @@ func AllAlertStatuses() []AlertStatus {
 	}
 }
 
-// ParseAlertStatus converts a string into an AlertStatus.
+// ParseAlertStatus converts a string into an AlertStatus, returning an
+// invalid-input domain error for unknown values.
 func ParseAlertStatus(s string) (AlertStatus, error) {
 	as := AlertStatus(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllAlertStatuses() {
@@ -175,7 +181,7 @@ func ParseAlertStatus(s string) (AlertStatus, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown alert status %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown alert status %q", s))
 }
 
 // InterlockAction enumerates the interlock commands that can be issued.
@@ -197,7 +203,8 @@ func AllInterlockActions() []InterlockAction {
 	}
 }
 
-// ParseInterlockAction converts a string into an InterlockAction.
+// ParseInterlockAction converts a string into an InterlockAction, returning
+// an invalid-input domain error for unknown values.
 func ParseInterlockAction(s string) (InterlockAction, error) {
 	ia := InterlockAction(strings.ToLower(strings.TrimSpace(s)))
 	for _, v := range AllInterlockActions() {
@@ -205,5 +212,5 @@ func ParseInterlockAction(s string) (InterlockAction, error) {
 			return v, nil
 		}
 	}
-	return "", fmt.Errorf("domain: unknown interlock action %q", s)
+	return "", InvalidInput(fmt.Sprintf("domain: unknown interlock action %q", s))
 }

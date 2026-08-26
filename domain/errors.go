@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrorCode is a stable machine-readable error code returned to clients.
 type ErrorCode string
@@ -27,9 +30,16 @@ type Error struct {
 	Cause   error
 }
 
-// Error implements the error interface.
+// Error implements the error interface. When the domain error wraps an
+// underlying cause the cause is appended so logs expose the real failure
+// (e.g. "internal: flush interlock log: store: fsync tmp: ...") instead of
+// only the high-level message.
 func (e *Error) Error() string {
-	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+	msg := fmt.Sprintf("%s: %s", e.Code, e.Message)
+	if e.Cause != nil {
+		return msg + ": " + e.Cause.Error()
+	}
+	return msg
 }
 
 // Unwrap returns the wrapped cause so errors.Is/As work.
@@ -60,17 +70,20 @@ func Conflict(message string) *Error {
 	return NewError(CodeConflict, message)
 }
 
-// AsDomainError unwraps a domain *Error from any error chain, returning nil
-// when the error is not domain-typed.
+// Internal returns an internal domain error wrapping an unexpected cause.
+// The cause is preserved so the request log surfaces the real failure.
+func Internal(message string, cause error) *Error {
+	return WrapError(CodeInternal, message, cause)
+}
+
+// AsDomainError unwraps a domain *Error from anywhere in an error chain
+// (including multi-level wraps such as service -> store -> domain), returning
+// nil when the error is not domain-typed. It walks the full chain via
+// errors.As so wrapping a domain error in one or more fmt.Errorf("...: %w")
+// layers never erases its code/message.
 func AsDomainError(err error) *Error {
-	if de, ok := err.(*Error); ok {
-		return de
-	}
-	u, ok := err.(interface{ Unwrap() error })
-	if !ok {
-		return nil
-	}
-	if de, ok := u.Unwrap().(*Error); ok {
+	var de *Error
+	if errors.As(err, &de) {
 		return de
 	}
 	return nil
