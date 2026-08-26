@@ -15,9 +15,16 @@ func encodeState(s *State) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-// decodeState parses a state snapshot from JSON.
+// decodeState parses a state snapshot from JSON. A malformed payload returns
+// the unmarshal error so the caller (Load) can back the corrupt file up and
+// restart from an empty state instead of silently treating it as empty and
+// overwriting it on the next save.
 func decodeState(data []byte, s *State) error {
-	_ = json.Unmarshal(data, s)
+	if err := json.Unmarshal(data, s); err != nil {
+		// Reset to a clean struct so a half-decoded state never leaks out.
+		*s = State{}
+		return fmt.Errorf("store: decode state: %w", err)
+	}
 	if s.Version != stateVersion {
 		// Future migrations can upgrade older snapshots here.
 		s.Version = stateVersion

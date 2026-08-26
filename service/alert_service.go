@@ -65,8 +65,10 @@ func (s *AlertService) Ack(id, operator, disposition, requestID string) (domain.
 	if err != nil {
 		return domain.CleanAlert{}, err
 	}
-	_ = s.audit.Log(domain.AuditAlertAck, operator, "alert", id,
-		fmt.Sprintf("alert %s acknowledged: %s", id, disposition), requestID)
+	if err := s.audit.Log(domain.AuditAlertAck, operator, "alert", id,
+		fmt.Sprintf("alert %s acknowledged: %s", id, disposition), requestID); err != nil {
+		return updated, err
+	}
 	return updated, nil
 }
 
@@ -81,7 +83,9 @@ func (s *AlertService) Escalate(id, operator, requestID string) (domain.CleanAle
 	if err != nil {
 		return domain.CleanAlert{}, err
 	}
-	_ = s.audit.Log(domain.AuditAlertEscalate, operator, "alert", id, "alert escalated for overdue acknowledgement", requestID)
+	if err := s.audit.Log(domain.AuditAlertEscalate, operator, "alert", id, "alert escalated for overdue acknowledgement", requestID); err != nil {
+		return updated, err
+	}
 	return updated, nil
 }
 
@@ -96,7 +100,9 @@ func (s *AlertService) Close(id, operator, reason, requestID string) (domain.Cle
 	if err != nil {
 		return domain.CleanAlert{}, err
 	}
-	_ = s.audit.Log(domain.AuditAlertClose, operator, "alert", id, reason, requestID)
+	if err := s.audit.Log(domain.AuditAlertClose, operator, "alert", id, reason, requestID); err != nil {
+		return updated, err
+	}
 	return updated, nil
 }
 
@@ -104,6 +110,11 @@ func (s *AlertService) Close(id, operator, reason, requestID string) (domain.Cle
 // type once the underlying condition has cleared. Open and escalated alerts
 // stay visible until an engineer acknowledges them (so the 1-hour
 // escalation rule keeps working even after the condition clears).
+//
+// Audit failures are logged (via AuditService.Log) but do not abort the
+// batch: this runs on the ingest hot path as best-effort recovery, and a
+// single audit write failure must not block persisting the remaining
+// closures. Persistence errors still abort and are returned.
 func (s *AlertService) ResolveActive(monitorZoneID string, t domain.AlertType, reason, requestID string) (int, error) {
 	all, err := s.store.Alerts().List(store.AlertFilter{MonitorZoneID: monitorZoneID, Type: t})
 	if err != nil {
@@ -118,6 +129,9 @@ func (s *AlertService) ResolveActive(monitorZoneID string, t domain.AlertType, r
 		if _, err := s.store.Alerts().Update(a); err != nil {
 			return closed, err
 		}
+		// Best-effort audit: the alert is already persisted, so a failed
+		// audit write must not unwind it. AuditService.Log logs the failure
+		// with the target id + request id for later reconciliation.
 		_ = s.audit.Log(domain.AuditAlertClose, "system", "alert", a.ID, reason, requestID)
 		closed++
 	}

@@ -59,6 +59,10 @@ func (s *EscalateSweeper) Sweep(now time.Time) (int, error) {
 		escalated++
 	}
 	if escalated > 0 {
+		// Best-effort batch audit: alerts are already persisted/escalated, so
+		// a failed audit write must not mask the successful escalation.
+		// AuditService.Log records the failure with enough context to
+		// reconcile the missing trail entry afterwards.
 		_ = s.audit.Log(domain.AuditAlertEscalate, "escalate_sweeper", "alert", "",
 			"batch escalation of overdue unacknowledged alerts", "")
 	}

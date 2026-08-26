@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -54,7 +55,15 @@ func (m *AuditLogger) Wrap(next http.Handler) http.Handler {
 			time.Now().UTC(),
 		)
 		entry.RequestID = RequestID(r.Context())
-		_, _ = m.store.Audit().Create(entry)
+		// The response has already been written to the client, so a failed
+		// audit write cannot be surfaced on this request. Log it with the
+		// method/path/request_id so the missing audit entry is traceable
+		// instead of being silently dropped.
+		if _, err := m.store.Audit().Create(entry); err != nil {
+			slog.Error("audit: failed to persist http.request entry",
+				"method", r.Method, "path", path, "status", status,
+				"request_id", entry.RequestID, "error", err)
+		}
 	})
 }
 

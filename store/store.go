@@ -83,8 +83,17 @@ func (s *Store) Load() error {
 		return fmt.Errorf("store: read %s: %w", s.file, err)
 	}
 	if err := decodeState(data, &s.state); err != nil {
+		// Move the corrupt file aside so (a) the original path is clear and
+		// the next Save does not overwrite the corrupt blob in place, losing
+		// the chance to recover it, and (b) a subsequent restart does not
+		// re-load the same corrupt file every time. Rename is atomic on the
+		// same filesystem; fall back to copy-then-remove if it fails (e.g.
+		// cross-device) so the original path is still cleared.
 		backup := s.file + ".bak"
-		_ = os.WriteFile(backup, data, 0o644)
+		if rerr := os.Rename(s.file, backup); rerr != nil {
+			_ = os.WriteFile(backup, data, 0o644)
+			_ = os.Remove(s.file)
+		}
 		s.state = State{Version: stateVersion, Seq: map[string]uint64{}}
 		s.loadWarning = fmt.Errorf("store: %s was corrupt (%v); backed up to %s and started with empty state", s.file, err, backup)
 		return nil
@@ -134,6 +143,17 @@ func (s *Store) saveLocked() error {
 		return fmt.Errorf("store: create tmp: %w", err)
 	}
 	tmpName := tmp.Name()
+	// On any failure path below the temp file is left behind on disk (e.g.
+	// ENOSPC mid-write). Remove it so a tight disk does not accumulate stale
+	// .tmp-* files that can never be cleaned up by the caller. renamed is set
+	// true once the file has been moved into place, at which point there is
+	// nothing left to remove.
+	renamed := false
+	defer func() {
+		if !renamed {
+			_ = os.Remove(tmpName)
+		}
+	}()
 
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
@@ -153,6 +173,7 @@ func (s *Store) saveLocked() error {
 	if err := os.Rename(tmpName, s.file); err != nil {
 		return fmt.Errorf("store: rename: %w", err)
 	}
+	renamed = true
 
 	// Best-effort directory fsync so the rename itself is durable.
 	if dirF, err := os.Open(dir); err == nil {

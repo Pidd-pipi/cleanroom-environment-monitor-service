@@ -85,7 +85,9 @@ func (s *InterlockService) IssueForArea(cleanZoneID, triggerMonitorZoneID, reaso
 
 	detail := fmt.Sprintf("interlock level=%d actions=%v peak_ratio=%.3f affected=%v",
 		level, actions, peakRatio, affected)
-	_ = s.audit.Log(domain.AuditInterlockIssue, "system", "clean_zone", zone.ID, detail, requestID)
+	if err := s.audit.Log(domain.AuditInterlockIssue, "system", "clean_zone", zone.ID, detail, requestID); err != nil {
+		return created, areaZones, err
+	}
 	return created, areaZones, nil
 }
 
@@ -174,7 +176,9 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 	}
 
 	detail := fmt.Sprintf("restore confirmed for physical area %s zones=%v", zone.PhysicalArea, len(restored))
-	_ = s.audit.Log(domain.AuditZoneRestore, operator, "clean_zone", zone.ID, detail, requestID)
+	if err := s.audit.Log(domain.AuditZoneRestore, operator, "clean_zone", zone.ID, detail, requestID); err != nil {
+		return restored, err
+	}
 	return restored, nil
 }
 

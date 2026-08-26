@@ -200,8 +200,10 @@ func (s *IngestService) Process(req IngestRequest) (IngestResult, error) {
 	if _, err := s.store.Samples().Append(sample, s.cfg.MaxSamplesPerZone); err != nil {
 		return res, err
 	}
-	_ = s.audit.Log(domain.AuditSampleIngest, req.Operator, "sample", sample.ID,
-		fmt.Sprintf("monitor=%s valid=%v ratio=%.3f", monitor.ID, sample.Valid, res.ParticleRatio), req.RequestID)
+	if err := s.audit.Log(domain.AuditSampleIngest, req.Operator, "sample", sample.ID,
+		fmt.Sprintf("monitor=%s valid=%v ratio=%.3f", monitor.ID, sample.Valid, res.ParticleRatio), req.RequestID); err != nil {
+		return res, err
+	}
 
 	// Re-read the zone/monitor so the result reflects all updates.
 	if z, err := s.store.CleanZones().Get(zone.ID); err == nil {

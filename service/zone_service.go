@@ -26,8 +26,10 @@ func (s *ZoneService) CreateCleanZone(z domain.CleanZone, operator, requestID st
 	if err != nil {
 		return domain.CleanZone{}, err
 	}
-	_ = s.audit.Log(domain.AuditZoneCreate, operator, "clean_zone", z.ID,
-		"clean zone created: "+z.Name, requestID)
+	if err := s.audit.Log(domain.AuditZoneCreate, operator, "clean_zone", z.ID,
+		"clean zone created: "+z.Name, requestID); err != nil {
+		return created, err
+	}
 	return created, nil
 }
 
@@ -38,8 +40,10 @@ func (s *ZoneService) CreateMonitorZone(m domain.MonitorZone, operator, requestI
 	if err != nil {
 		return domain.MonitorZone{}, err
 	}
-	_ = s.audit.Log(domain.AuditMonitorCreate, operator, "monitor_zone", m.ID,
-		"monitor zone created: "+m.Name, requestID)
+	if err := s.audit.Log(domain.AuditMonitorCreate, operator, "monitor_zone", m.ID,
+		"monitor zone created: "+m.Name, requestID); err != nil {
+		return created, err
+	}
 	return created, nil
 }
 
@@ -84,7 +88,9 @@ func (s *ZoneService) SetMaintenance(monitorZoneID string, inMaintenance bool, n
 	if !inMaintenance {
 		action = domain.AuditMaintenanceEnd
 	}
-	_ = s.audit.Log(action, operator, "monitor_zone", monitorZoneID, note, requestID)
+	if err := s.audit.Log(action, operator, "monitor_zone", monitorZoneID, note, requestID); err != nil {
+		return updated, err
+	}
 	return updated, nil
 }
 
@@ -100,7 +106,9 @@ func (s *ZoneService) SetCalibration(monitorZoneID string, due time.Time, operat
 	if err != nil {
 		return domain.MonitorZone{}, err
 	}
-	_ = s.audit.Log(domain.AuditMaintenanceEnd, operator, "monitor_zone", monitorZoneID,
-		"calibration due updated to "+due.Format(time.RFC3339), requestID)
+	if err := s.audit.Log(domain.AuditMaintenanceEnd, operator, "monitor_zone", monitorZoneID,
+		"calibration due updated to "+due.Format(time.RFC3339), requestID); err != nil {
+		return updated, err
+	}
 	return updated, nil
 }
