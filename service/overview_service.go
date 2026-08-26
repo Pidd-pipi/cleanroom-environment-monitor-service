@@ -72,6 +72,15 @@ func (s *OverviewService) Build() (Overview, error) {
 		monitorsByZone[m.CleanZoneID] = append(monitorsByZone[m.CleanZoneID], m)
 	}
 
+	// Snapshot the whole sample history once, under a single read lock, so
+	// every monitor-zone window in this aggregate reflects the same instant.
+	// Re-locking per monitor zone would otherwise let a concurrent Append/trim
+	// mix windows captured at different times.
+	allSamples, err := s.store.Samples().List()
+	if err != nil {
+		return Overview{}, err
+	}
+
 	out := Overview{GeneratedAt: nowString()}
 	interlockedZones := 0
 	for _, z := range zones {
@@ -86,14 +95,16 @@ func (s *OverviewService) Build() (Overview, error) {
 		}
 		for _, m := range monitorsByZone[z.ID] {
 			omz := OverviewMonitorZone{MonitorZone: m}
-			window, _ := s.store.Samples().RecentByMonitorZone(m.ID, s.cfg.SampleWindow())
+			// RecentByMonitorZoneFrom returns newest-first, so window[0] is
+			// the freshest reading and window[len-1] the oldest.
+			window := recentByMonitorZoneFrom(allSamples, m.ID, s.cfg.SampleWindow())
 			if len(window) == 0 {
 				omz.InvalidRatio = 0
 				ovz.MonitorZones = append(ovz.MonitorZones, omz)
 				continue
 			}
-			sample := window[len(window)-1]
-			omz.LatestSample = &sample
+			latest := window[0]
+			omz.LatestSample = &latest
 			ratio, _ := domain.EvaluateInvalidRatio(window, s.cfg.SampleWindow(), s.cfg.InvalidRatioThreshold)
 			omz.InvalidRatio = ratio
 			ovz.MonitorZones = append(ovz.MonitorZones, omz)
@@ -121,6 +132,27 @@ func sumMap(m map[string]int) int {
 		total += v
 	}
 	return total
+}
+
+// recentByMonitorZoneFrom filters an already-snapshotted sample slice down to
+// one monitor zone, ordered newest-first, limited to `n` entries (0 = all).
+// It mirrors store.SampleStore.RecentByMonitorZone but operates on the
+// caller's private snapshot so every zone in a single overview aggregate
+// reads from the same instant instead of re-locking per zone.
+func recentByMonitorZoneFrom(all []domain.EnvSample, monitorZoneID string, n int) []domain.EnvSample {
+	out := make([]domain.EnvSample, 0)
+	for _, s := range all {
+		if s.MonitorZoneID == monitorZoneID {
+			out = append(out, s)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Timestamp.After(out[j].Timestamp)
+	})
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
 }
 
 // nowString returns the current UTC time in RFC3339.

@@ -49,14 +49,23 @@ func (r *SampleStore) trimLocked(monitorZoneID string, maxPerZone int) {
 	r.s.state.Samples = kept
 }
 
-// List returns all samples.
+// List returns a defensive copy of all samples. The slice is taken under the
+// read lock so a concurrent Append/trim cannot race on the slice header or
+// alias the store's internal buffer for the caller.
 func (r *SampleStore) List() ([]domain.EnvSample, error) {
-	return r.s.state.Samples, nil
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+	out := make([]domain.EnvSample, len(r.s.state.Samples))
+	copy(out, r.s.state.Samples)
+	return out, nil
 }
 
 // ListByMonitorZone returns the samples of a monitor zone ordered newest
-// first, limited to `limit` entries (0 = all).
+// first, limited to `limit` entries (0 = all). The result is built from a
+// locked snapshot so it cannot observe an in-flight Append/trim.
 func (r *SampleStore) ListByMonitorZone(monitorZoneID string, limit int) ([]domain.EnvSample, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
 	out := make([]domain.EnvSample, 0)
 	for _, s := range r.s.state.Samples {
 		if s.MonitorZoneID == monitorZoneID {
@@ -73,8 +82,12 @@ func (r *SampleStore) ListByMonitorZone(monitorZoneID string, limit int) ([]doma
 }
 
 // RecentByMonitorZone returns the last `n` samples newest-first for the
-// invalid-ratio computation.
+// invalid-ratio computation. The result is built from a locked snapshot so a
+// concurrent Append/trim cannot race on the slice header or mutate the
+// returned samples.
 func (r *SampleStore) RecentByMonitorZone(monitorZoneID string, n int) ([]domain.EnvSample, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
 	out := make([]domain.EnvSample, 0)
 	for _, s := range r.s.state.Samples {
 		if s.MonitorZoneID == monitorZoneID {
