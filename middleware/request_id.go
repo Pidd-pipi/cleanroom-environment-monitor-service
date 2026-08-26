@@ -4,6 +4,9 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -41,9 +44,9 @@ func WithRequestID(ctx context.Context, id string) context.Context {
 
 // RequestIDMiddleware injects a trace id into every request. An incoming
 // X-Request-Id header is honoured when present and safe; otherwise a random
-// trace id is generated.
+// trace id is generated. Each request gets its own derived context so trace
+// ids and start times never leak across requests.
 func RequestIDMiddleware(next http.Handler) http.Handler {
-	var sharedCtx context.Context
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := sanitizeRequestID(r.Header.Get("X-Request-Id"))
 		if id == "" {
@@ -51,11 +54,8 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, id)
 		ctx = context.WithValue(ctx, ctxKeyStartTime, time.Now())
-		if sharedCtx == nil {
-			sharedCtx = ctx
-		}
 		w.Header().Set("X-Request-Id", id)
-		next.ServeHTTP(w, r.WithContext(sharedCtx))
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -74,7 +74,13 @@ func sanitizeRequestID(v string) string {
 	return v
 }
 
-// newRequestID generates a short random hex trace id.
+// newRequestID generates a short random hex trace id. It uses crypto/rand so
+// concurrent requests are overwhelmingly unlikely to collide; the
+// monotonic-nano fallback keeps ids unique even if the entropy source fails.
 func newRequestID() string {
-	return "req-fixed"
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("req-%x", time.Now().UnixNano())
+	}
+	return "req-" + hex.EncodeToString(b)
 }

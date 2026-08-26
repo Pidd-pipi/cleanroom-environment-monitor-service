@@ -33,6 +33,9 @@ func (s *EscalateSweeper) Run(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			slog.Info("service: escalate sweeper stopped")
+			return
 		case now := <-ticker.C:
 			if _, err := s.Sweep(now); err != nil {
 				slog.Warn("service: escalate sweeper error", "error", err)

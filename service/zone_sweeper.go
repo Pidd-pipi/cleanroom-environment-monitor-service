@@ -33,6 +33,9 @@ func (s *ZoneSweeper) Run(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			slog.Info("service: zone sweeper stopped")
+			return
 		case now := <-ticker.C:
 			if _, err := s.Sweep(now); err != nil {
 				slog.Warn("service: zone sweeper error", "error", err)
