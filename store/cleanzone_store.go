@@ -81,7 +81,8 @@ func (r *CleanZoneStore) ListByPhysicalArea(area string) ([]domain.CleanZone, er
 	return out, nil
 }
 
-// Delete removes a clean zone; monitor zones of the zone are removed too.
+// Delete removes a clean zone; monitor zones belonging to the zone are
+// removed too (cascade) so no orphaned monitor points survive the parent.
 func (r *CleanZoneStore) Delete(id string) error {
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
@@ -95,13 +96,17 @@ func (r *CleanZoneStore) Delete(id string) error {
 	if idx < 0 {
 		return domain.NotFound("clean zone", id)
 	}
+	// Drop the clean zone (shift left and reslice, do not leave a stale tail).
 	copy(r.s.state.CleanZones[idx:], r.s.state.CleanZones[idx+1:])
-	// Cascade: drop monitor zones belonging to the zone.
-	kept := r.s.state.MonitorZones[:0]
+	r.s.state.CleanZones = r.s.state.CleanZones[:len(r.s.state.CleanZones)-1]
+
+	// Cascade: drop monitor zones whose parent is the deleted clean zone.
+	kept := make([]domain.MonitorZone, 0, len(r.s.state.MonitorZones))
 	for _, m := range r.s.state.MonitorZones {
 		if m.CleanZoneID == id {
-			kept = append(kept, m)
+			continue
 		}
+		kept = append(kept, m)
 	}
 	r.s.state.MonitorZones = kept
 	return r.s.flushLocked()

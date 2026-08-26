@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sort"
 	"time"
 
 	"example.com/cleanroom-environment-monitor-service/domain"
@@ -45,11 +46,15 @@ func (r *AlertStore) Get(id string) (domain.CleanAlert, error) {
 	return domain.CleanAlert{}, domain.NotFound("alert", id)
 }
 
-// List returns alerts optionally filtered by status/type, newest first.
+// List returns alerts optionally filtered by status/type, newest first. It
+// copies into a fresh slice so filtering never mutates the persisted state
+// (an earlier in-place filter corrupted the backing array, which made alerts
+// vanish or duplicate when a type filter was applied before an unfiltered
+// view).
 func (r *AlertStore) List(filter AlertFilter) ([]domain.CleanAlert, error) {
 	r.s.mu.RLock()
 	defer r.s.mu.RUnlock()
-	out := r.s.state.Alerts[:0]
+	out := make([]domain.CleanAlert, 0)
 	for _, a := range r.s.state.Alerts {
 		if filter.Status != "" && a.Status != filter.Status {
 			continue
@@ -65,6 +70,10 @@ func (r *AlertStore) List(filter AlertFilter) ([]domain.CleanAlert, error) {
 		}
 		out = append(out, a)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		// Newest first: a merged alert refreshes CreatedAt, so it stays on top.
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
 	return out, nil
 }
 

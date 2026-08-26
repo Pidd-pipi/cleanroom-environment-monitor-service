@@ -67,10 +67,29 @@ func NewAlert(id, cleanZoneID, monitorZoneID string, t AlertType, level AlertLev
 	}
 }
 
+// AlertLevelRank orders severities so a worse level wins on merge. Higher
+// numbers mean more severe (info < warning < critical).
+func AlertLevelRank(l AlertLevel) int {
+	switch l {
+	case AlertLevelInfo:
+		return 1
+	case AlertLevelWarning:
+		return 2
+	case AlertLevelCritical:
+		return 3
+	}
+	return 0
+}
+
 // Merge folds a repeated occurrence into an existing alert within the dedup
-// window, bumping the counter and refreshing the timestamp/message.
+// window: the occurrence counter is bumped (never reset), the severity is
+// raised to the worse of the two levels so a later critical sample promotes
+// an earlier warning, and the latest timestamp/message/sample are refreshed.
 func (a *CleanAlert) Merge(other CleanAlert) {
-	a.Count = other.Count
+	a.Count++
+	if AlertLevelRank(other.Level) > AlertLevelRank(a.Level) {
+		a.Level = other.Level
+	}
 	a.CreatedAt = other.CreatedAt
 	a.Message = other.Message
 	a.SampleID = other.SampleID
