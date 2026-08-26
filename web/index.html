@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>洁净室环境监控 · Cleanroom Monitor</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <h1>洁净室环境监控</h1>
+      <span class="brand-sub">Cleanroom Environment Monitor</span>
+    </div>
+    <nav class="main-nav" id="main-nav">
+      <a href="/" data-link class="nav-link">总览</a>
+      <a href="/alerts" data-link class="nav-link">报警台</a>
+      <a href="/interlocks" data-link class="nav-link">联锁记录</a>
+      <a href="/equipment" data-link class="nav-link">设备状态</a>
+    </nav>
+    <div class="header-meta">
+      <span id="clock" class="clock"></span>
+      <span class="health-pill" id="health-pill">…</span>
+    </div>
+  </header>
+  <main id="app" class="app-main">
+    <div class="page-loading">加载中…</div>
+  </main>
+  <footer class="app-footer">
+    <span>example.com/cleanroom-environment-monitor-service</span>
+    <span>go:embed 原生前端 · 离线可运行</span>
+  </footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
