@@ -59,7 +59,15 @@ func AllowedTransitionsFrom(from ZoneStatus) []ZoneStatus {
 //	r >= overLimitRatio : over_limit
 //	1.0 <= r < overLimitRatio : elevated
 //	r < 1.0 : normal
+//
+// An interlocked zone is terminal until a manual restore confirmation: no
+// fresh reading — not even a new over-limit — may move it back to over_limit
+// or elevated. The guard lives here so every caller is protected regardless
+// of whether it short-circuits the over-limit branch beforehand.
 func TargetStatusFromRatio(current ZoneStatus, ratio, overLimitRatio float64) ZoneStatus {
+	if current == ZoneStatusInterlocked {
+		return ZoneStatusInterlocked
+	}
 	switch {
 	case ratio >= overLimitRatio:
 		return ZoneStatusOverLimit

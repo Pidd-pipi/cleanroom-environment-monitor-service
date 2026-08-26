@@ -126,12 +126,29 @@ func (s *InterlockService) applyInterlockCommands(physicalArea string, actions [
 
 // Restore confirms recovery of a clean zone: per the state machine the zone
 // moves to restored and every open interlock log of the physical area is
-// closed. Only an interlocked zone may be restored.
+// closed. Only an interlocked zone may be restored; restoring a clean or
+// over-limit zone is rejected so operators cannot "confirm" a recovery that
+// never interlocked, and the open interlock logs of the whole physical area
+// (not only the triggering zone's log) are closed.
 func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string) ([]domain.CleanZone, error) {
 	zone, err := s.store.CleanZones().Get(cleanZoneID)
 	if err != nil {
 		return nil, err
 	}
+
+	// A restore confirmation is only meaningful for a zone that is currently
+	// interlocked. Over-limit, elevated, normal or restored zones have no
+	// active interlock to confirm: silently succeeding here would let an
+	// operator "restore" a clean zone and mask a real interlock elsewhere.
+	if zone.Status != domain.ZoneStatusInterlocked {
+		if zone.Status == domain.ZoneStatusRestored {
+			// Idempotent re-confirm: nothing to do, no logs to close.
+			return []domain.CleanZone{zone}, nil
+		}
+		return nil, domain.Conflict(
+			fmt.Sprintf("clean zone %s is %s; only an interlocked zone can be restored", zone.ID, zone.Status))
+	}
+
 	areaZones, err := s.store.CleanZones().ListByPhysicalArea(zone.PhysicalArea)
 	if err != nil {
 		return nil, err
@@ -154,13 +171,15 @@ func (s *InterlockService) Restore(cleanZoneID, operator, note, requestID string
 		restored = append(restored, *z)
 	}
 
-	// Close every open interlock log of the physical area.
+	// Close every open interlock log of the physical area. The triggering
+	// zone recorded in the log (CleanZoneID) may be any zone of the area, so
+	// restoring from a sibling zone must still close the trigger's log.
 	logs, err := s.store.Interlocks().List()
 	if err != nil {
 		return nil, err
 	}
 	for _, l := range logs {
-		if !l.IsOpen() || l.PhysicalArea != zone.PhysicalArea || l.CleanZoneID != zone.ID {
+		if !l.IsOpen() || l.PhysicalArea != zone.PhysicalArea {
 			continue
 		}
 		l.Close(operator, note, now)

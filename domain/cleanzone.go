@@ -87,8 +87,11 @@ func (z *CleanZone) SetStatus(next ZoneStatus) bool {
 	return true
 }
 
-// InInterlockedState reports whether the zone is currently interlocked or
-// waiting for restore confirmation (used by area-wide propagation).
+// InInterlockedState reports whether the zone is currently under an active
+// ventilation interlock (used by area-wide propagation). Only the interlocked
+// status counts: over_limit is the pre-interlock overrun state and must not be
+// treated as already interlocked, otherwise a sibling over-limit zone would
+// be skipped during area propagation and never receive the interlock command.
 func (z *CleanZone) InInterlockedState() bool {
-	return z.Status == ZoneStatusInterlocked || z.Status == ZoneStatusOverLimit
+	return z.Status == ZoneStatusInterlocked
 }
