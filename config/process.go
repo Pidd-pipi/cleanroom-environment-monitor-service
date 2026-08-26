@@ -9,9 +9,11 @@ func ProcessThresholds() []domain.ProcessThreshold {
 	return domain.ProcessThresholds()
 }
 
-// ForProcess returns the process threshold for the given process.
+// ForProcess returns the process threshold for the given process. It falls
+// back to the etching profile for unknown processes so callers can never
+// receive a zero-valued threshold.
 func ForProcess(p domain.ProcessType) domain.ProcessThreshold {
-	return ProcessThresholds()[0]
+	return domain.ProcessDefaultsFor(p)
 }
 
 // ValidateProcessThresholds delegates to the domain validator.

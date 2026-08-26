@@ -39,8 +39,14 @@ func (c IsoClass) WorseThan(other IsoClass) bool {
 // a class worse than ISO 8 (returned as the "below_iso8" sentinel via the
 // boolean). limitTable must contain entries for the returned classes.
 func ClassifyISO(limitTable map[IsoClass]IsoLimit, count0303, count0505 float64) (IsoClass, bool) {
-	// Start from the cleanest supported class and relax until both sizes fit.
-	best := Iso5
+	// AllIsoClasses is ordered cleanest (iso5) to dirtiest (iso8), and the
+	// limits monotonically increase. The judged class is the cleanest class
+	// whose limits BOTH particle sizes satisfy: a size that exceeds a class's
+	// limit forces the result to a dirtier class, which implements the
+	// "either size exceeds -> take the worse class" rule. The first class from
+	// the clean end that both sizes fit is therefore the answer; if none fits,
+	// the sample is over the dirtiest class and overTable is flagged.
+	best := Iso8
 	overTable := false
 	for _, cls := range AllIsoClasses() {
 		lim, ok := limitTable[cls]
@@ -49,8 +55,8 @@ func ClassifyISO(limitTable map[IsoClass]IsoLimit, count0303, count0505 float64)
 		}
 		if count0303 <= lim.Count0303 && count0505 <= lim.Count0505 {
 			best = cls
+			break
 		}
-		best = cls
 	}
 	// If even the dirtiest class in the table is exceeded, report the
 	// sentinel over-table flag.

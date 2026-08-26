@@ -101,16 +101,17 @@ func ValidSampleRatio(samples []EnvSample) float64 {
 }
 
 // RecentSamples returns up to `n` samples ordered newest-first (the caller
-// should already pass newest-first data; this just bounds the window).
+// should already pass newest-first data; this just bounds the window). A
+// non-positive `n` means "no bound" and returns the whole slice.
 func RecentSamples(samples []EnvSample, n int) []EnvSample {
 	if n <= 0 || len(samples) <= n {
 		return samples
 	}
-	oldest := make([]EnvSample, 0, n)
-	for i := len(samples) - n; i < len(samples); i++ {
-		oldest = append(oldest, samples[i])
-	}
-	return oldest
+	// Newest-first means the most recent readings are at the head of the
+	// slice, so the recent window is the first `n` elements.
+	recent := make([]EnvSample, n)
+	copy(recent, samples[:n])
+	return recent
 }
 
 // ClampTemperatureRange returns the temperature clamped to a sane physical

@@ -81,16 +81,20 @@ func (s *IngestService) Process(req IngestRequest) (IngestResult, error) {
 	if ts.IsZero() {
 		ts = time.Now().UTC()
 	}
-	validity := domain.EvaluateValidity(nil, ts)
+	validity := domain.EvaluateValidity(&monitor, ts)
 	if !validity.Valid {
 		sample.MarkInvalid(validity.Reason)
 	}
 	res.Sample = sample
 
 	isoTable := config.ISO14644Limits()
-	processThreshold := config.ForProcess(domain.ProcessEtching)
+	// Thresholds are per-process: each clean zone belongs to a specific
+	// process area (lithography / etching / diffusion) whose particle
+	// multiplier and environment ranges differ. Resolve them from the zone's
+	// actual process, otherwise zones silently share the wrong thresholds.
+	processThreshold := config.ForProcess(zone.Process)
 	limits := monitor.EffectiveLimits(zone.IsoClass, isoTable, processThreshold.ParticleMultiplier)
-	envRange := monitor.EffectiveEnvRange(domain.ProcessEtching)
+	envRange := monitor.EffectiveEnvRange(zone.Process)
 
 	if sample.Valid {
 		// ---- ISO classification (rule 2) ------------------------------
@@ -172,6 +176,11 @@ func (s *IngestService) Process(req IngestRequest) (IngestResult, error) {
 			res.AlertsClosed += n
 		}
 	}
+
+	// Sync the now-classified sample back into the result so callers see the
+	// resolved ISO class / over-table flag, not the pre-classification copy
+	// captured before the valid branch mutated the local sample.
+	res.Sample = sample
 
 	// ---- Data credibility (rule 3: >30% invalid) ----------------------
 	recent, err := s.store.Samples().RecentByMonitorZone(monitor.ID, s.cfg.SampleWindow())
