@@ -104,17 +104,27 @@ func (m *MonitorZone) IsInMaintenance() bool {
 }
 
 // IsCalibrationExpired reports whether the counter calibration is overdue.
+// A counter whose calibration due date was never set (the zero value, e.g. a
+// legacy monitor loaded from an old snapshot) is treated as "not configured"
+// rather than expired, so its readings are not silently discarded.
 func (m *MonitorZone) IsCalibrationExpired(now time.Time) bool {
+	if m.Equipment.CalibrationDue.IsZero() {
+		return false
+	}
 	return now.After(m.Equipment.CalibrationDue)
 }
 
-// SetMaintenance toggles the PM maintenance flag on the equipment.
+// SetMaintenance toggles the PM maintenance flag on the equipment. Starting
+// maintenance stamps MaintenanceSince; ending maintenance clears it so the
+// stale timestamp does not linger after the counter is back in service.
 func (m *MonitorZone) SetMaintenance(inMaintenance bool, note string) {
 	now := time.Now().UTC()
 	m.Equipment.InMaintenance = inMaintenance
 	m.Equipment.MaintenanceNote = note
 	if inMaintenance {
 		m.Equipment.MaintenanceSince = &now
+	} else {
+		m.Equipment.MaintenanceSince = nil
 	}
 	m.UpdatedAt = now
 }
@@ -142,9 +152,20 @@ func (m *MonitorZone) EffectiveLimits(isoClass IsoClass, isoTable map[IsoClass]I
 }
 
 // EffectiveEnvRange resolves the environment ranges, falling back to the
-// process defaults when no override is set.
+// process defaults when no override is set. A monitor zone that never had
+// its temperature/humidity/pressure thresholds configured is therefore judged
+// against the defaults of its owning process instead of an all-zero range
+// (which would flag every reading as out of range).
 func (m *MonitorZone) EffectiveEnvRange(process ProcessType) EnvRange {
-	var out EnvRange
+	def := ProcessDefaultsFor(process)
+	out := EnvRange{
+		TempMin:     def.TempMin,
+		TempMax:     def.TempMax,
+		HumidityMin: def.HumidityMin,
+		HumidityMax: def.HumidityMax,
+		PressureMin: def.PressureMin,
+		PressureMax: def.PressureMax,
+	}
 	if m.Thresholds.TempMin != 0 {
 		out.TempMin = m.Thresholds.TempMin
 	}

@@ -14,7 +14,16 @@ type ValidityResult struct {
 // equipment: readings from counters in PM maintenance or with expired
 // calibration are invalid and must not take part in ISO classification.
 // `now` is injectable so tests can freeze time.
+//
+// A nil monitor never crashes the evaluator: it is reported as invalid so the
+// caller can still record a defensive audit trail instead of taking the whole
+// process down. This matters because the validity path runs from the ingest
+// handler and the background sweepers, neither of which can propagate a
+// nil-pointer panic safely.
 func EvaluateValidity(m *MonitorZone, now time.Time) ValidityResult {
+	if m == nil {
+		return ValidityResult{Valid: false, Reason: "monitor_not_found"}
+	}
 	if m.IsInMaintenance() {
 		return ValidityResult{Valid: false, Reason: "counter_in_pm_maintenance"}
 	}
