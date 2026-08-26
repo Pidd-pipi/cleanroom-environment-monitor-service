@@ -1,9 +1,9 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"example.com/cleanroom-environment-monitor-service/config"
@@ -25,9 +25,22 @@ func NewBootstrap(cfg *config.Config, st *store.Store, ingest *IngestService) *B
 	return &Bootstrap{cfg: cfg, store: st, ingest: ingest}
 }
 
-// SeedIfEmpty seeds the store when no clean zones exist yet. It is
-// idempotent so restarts never duplicate fixtures.
+// SeedIfEmpty seeds the store when no clean zones exist yet. It is idempotent
+// so restarts (or a partially-seeded store after a crash) never duplicate
+// fixtures or fail with a conflict: an already-populated store is a no-op,
+// and individual fixtures that already exist are skipped rather than treated
+// as errors.
 func (b *Bootstrap) SeedIfEmpty() error {
+	zoneCount, err := b.store.CleanZones().Count()
+	if err != nil {
+		return fmt.Errorf("bootstrap: count zones: %w", err)
+	}
+	if zoneCount > 0 {
+		// The store was restored from a snapshot or already seeded: do not
+		// recreate fixtures. This is the steady-state restart path.
+		slog.Info("bootstrap: store already seeded, skipping")
+		return nil
+	}
 	if err := b.seed(); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
@@ -52,7 +65,11 @@ func (b *Bootstrap) seed() error {
 
 	for _, z := range []domain.CleanZone{zoneA, zoneB, zoneC} {
 		if _, err := b.store.CleanZones().Create(z); err != nil {
-			return err
+			// A concurrent seeder (or a partial seed after a crash) may have
+			// already inserted this fixture. Skip it instead of aborting.
+			if !isAlreadyExists(err) {
+				return err
+			}
 		}
 	}
 
@@ -70,19 +87,17 @@ func (b *Bootstrap) seed() error {
 	mzA2.Equipment.FFULevel = 60
 	mzA2.Equipment.FreshAirRatio = 30
 
-	errCh := make(chan error, 1)
-	var wg sync.WaitGroup
+	// Seed monitor zones sequentially. The store serialises every mutation
+	// behind its write lock (each Create flushes to disk), so spawning a
+	// goroutine per monitor added contention and a leaking error channel
+	// without any parallelism benefit. Doing it inline is simpler and the
+	// per-monitor errors are all checked.
 	for _, m := range []domain.MonitorZone{mzA1, mzA2, mzB1, mzB2, mzC1, mzC2} {
-		wg.Add(1)
-		go func(mm domain.MonitorZone) {
-			_, err := b.store.MonitorZones().Create(mm)
-			wg.Done()
-			errCh <- err
-		}(m)
-	}
-	wg.Wait()
-	if err := <-errCh; err != nil {
-		return err
+		if _, err := b.store.MonitorZones().Create(m); err != nil {
+			if !isAlreadyExists(err) {
+				return err
+			}
+		}
 	}
 
 	// Seed one clean baseline sample per monitor zone so the overview and
@@ -114,10 +129,24 @@ func (b *Bootstrap) seed() error {
 			Operator:      "bootstrap",
 		}
 		if _, err := b.ingestBaseline(req); err != nil {
-			return err
+			// A duplicate baseline sample is harmless (idempotent seed).
+			if !isAlreadyExists(err) {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// isAlreadyExists reports whether err is a conflict indicating that the entity
+// already exists. Seed fixtures share stable ids, so a conflict during a
+// (re-)seed means the fixture is already present and the seeder can skip it.
+func isAlreadyExists(err error) bool {
+	var de *domain.Error
+	if errors.As(err, &de) {
+		return de.Code == domain.CodeConflict
+	}
+	return false
 }
 
 // ingestBaseline reuses the ingest pipeline so seeded samples follow the

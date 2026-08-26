@@ -59,12 +59,23 @@ func parsePagination(r *http.Request) (limit, offset int, err error) {
 }
 
 // paginate slices items according to limit/offset and returns the page plus
-// the total count. limit == 0 means no upper bound (return all remaining).
+// the total count. limit == 0 means no upper bound (return all remaining). An
+// offset beyond the last item yields an empty page rather than panicking, so
+// deep pagination over a small result set stays safe.
 func paginate(itemsLen, limit, offset int) (start, end int) {
 	start = offset
+	if start < 0 {
+		start = 0
+	}
+	if start > itemsLen {
+		start = itemsLen
+	}
 	end = itemsLen
 	if limit > 0 && start+limit < end {
 		end = start + limit
+	}
+	if end < start {
+		end = start
 	}
 	return start, end
 }

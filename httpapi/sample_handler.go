@@ -60,7 +60,8 @@ func (h *SampleHandler) PostSample(w http.ResponseWriter, r *http.Request) {
 		Fail(w, r, err)
 		return
 	}
-	_, _ = h.svc.Store.Samples().Append(result.Sample, h.svc.Cfg.MaxSamplesPerZone)
+	// The sample is persisted inside IngestService.Process; appending again
+	// here would duplicate every report and leak memory over time.
 	OK(w, r, result)
 }
 
