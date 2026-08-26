@@ -1,0 +1,10 @@
+{
+  "mode": "service",
+  "start": "go run .",
+  "env": {
+    "PORT": "18109",
+    "DATA_FILE": "/tmp/cleanroom_009.json"
+  },
+  "ready_url": "http://127.0.0.1:18109/healthz",
+  "project_intro": "基于 Go 实现的半导体洁净室环境监控全栈 Web 项目，一款后端服务，完成洁净区分区管理、粒子/温湿度采集、ISO 洁净度等级判定、设备联锁与报警处置。"
+}
